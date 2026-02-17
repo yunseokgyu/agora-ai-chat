@@ -68,7 +68,7 @@ async function toggleCall() {
 
 // --- Visualizer Logic ---
 function initVisualizer(ctx) {
-    if (analyser) return; // Already initialized
+    if (analyser) return;
     analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
     drawVisualizer();
@@ -219,9 +219,9 @@ async function startAiChat() {
     try {
         // Shared AudioContext for Mic & Playback & Visualizer
         audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-        playbackContext = audioContext; // Use same context if possible, or create new if rate differs
+        playbackContext = audioContext;
 
-        // Init Visualizer immediately with this context
+        // Init Visualizer immediately
         initVisualizer(audioContext);
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -278,9 +278,19 @@ async function startRecording() {
     const source = audioContext.createMediaStreamSource(stream);
     const processor = audioContext.createScriptProcessor(4096, 1, 1);
 
-    // Connect Mic to Visualizer
+    // Connect Mic to Visualizer (One-way)
     if (analyser) {
-        source.connect(analyser); // Mic -> Visualizer
+        // Create a gain node with 0 gain to prevent feedback if we were to connect to destination
+        // But for analyser, we just connect source -> analyser.
+        // The issue is if analyser is connected to destination elsewhere.
+        // In playPcmAudio, we connect analyser -> destination.
+        // We must disconnect analyser from destination when MIC is using it?
+        // Or better: Use two separate analysers or manage connections dynamically.
+        // Simpler fix: Source -> Analyser. Analyser -> X (Nothing).
+        // Playback Source -> Analyser. Analyser -> Destination.
+        // This is safe because Playback Source IS the audio we want to hear.
+        // Mic Source IS NOT.
+        source.connect(analyser);
     }
 
     source.connect(processor);
@@ -377,12 +387,12 @@ function playPcmAudio(base64Data) {
         const source = playbackContext.createBufferSource();
         source.buffer = buffer;
 
-        // Connect to Visualizer AND Speaker
+        // Connect Source directly to Destination (Speaker) so we can hear it
+        source.connect(playbackContext.destination);
+
+        // Also connect to Visualizer (Analzyer) so we can see it
         if (analyser) {
-            source.connect(analyser); // Connect AI Audio to Visualizer
-            analyser.connect(playbackContext.destination);
-        } else {
-            source.connect(playbackContext.destination);
+            source.connect(analyser);
         }
 
         const currentTime = playbackContext.currentTime;
