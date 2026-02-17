@@ -4,14 +4,16 @@ let localAudioTrack;
 
 // Gemini Globals
 let audioContext;   // For Microphone input
-let playbackCtx;    // For Speaker output
+let playbackContext; // AudioContext for playback (renamed from playbackCtx)
 let nextStartTime = 0;
 let websocket;
+let currentSourceNodes = []; // Track active source nodes to stop them for barge-in
 
 // Visualizer Globals
 let analyser;
 let visualizerCanvas = document.getElementById('visualizer');
 let visualizerCtx = visualizerCanvas.getContext('2d');
+let animationId;
 
 // --- UI Logic ---
 const statusText = document.getElementById('status-text');
@@ -65,16 +67,16 @@ async function toggleCall() {
 }
 
 // --- Visualizer Logic ---
-function initVisualizer() {
-    if (!playbackCtx) return;
-    analyser = playbackCtx.createAnalyser();
+function initVisualizer(ctx) {
+    if (analyser) return; // Already initialized
+    analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
     drawVisualizer();
 }
 
 function drawVisualizer() {
     if (!analyser) return;
-    requestAnimationFrame(drawVisualizer);
+    animationId = requestAnimationFrame(drawVisualizer);
 
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteFrequencyData(dataArray);
@@ -84,12 +86,12 @@ function drawVisualizer() {
     // Circular Visualizer
     const centerX = visualizerCanvas.width / 2;
     const centerY = visualizerCanvas.height / 2;
-    const radius = 50;
-    const bars = 40;
+    const radius = 60; // Slightly larger
+    const bars = 50;
 
     for (let i = 0; i < bars; i++) {
         const value = dataArray[i];
-        const barHeight = (value / 255) * 80;
+        const barHeight = (value / 255) * 60;
         const rad = (i * 2 * Math.PI) / bars;
 
         const xStart = centerX + Math.cos(rad) * radius;
@@ -97,8 +99,17 @@ function drawVisualizer() {
         const xEnd = centerX + Math.cos(rad) * (radius + barHeight);
         const yEnd = centerY + Math.sin(rad) * (radius + barHeight);
 
-        visualizerCtx.strokeStyle = `rgba(255, 255, 255, ${value / 255})`;
-        visualizerCtx.lineWidth = 4;
+        // Dynamic Color based on Status
+        let color = `rgba(255, 255, 255, ${value / 255})`;
+        if (statusDot.classList.contains('speaking')) {
+            color = `rgba(244, 114, 182, ${value / 255})`; // Pink
+        } else if (statusDot.classList.contains('listening')) {
+            color = `rgba(251, 191, 36, ${value / 255})`; // Amber
+        }
+
+        visualizerCtx.strokeStyle = color;
+        visualizerCtx.lineWidth = 3;
+        visualizerCtx.lineCap = 'round';
         visualizerCtx.beginPath();
         visualizerCtx.moveTo(xStart, yStart);
         visualizerCtx.lineTo(xEnd, yEnd);
@@ -107,7 +118,9 @@ function drawVisualizer() {
 }
 
 function stopVisualizer() {
+    if (animationId) cancelAnimationFrame(animationId);
     visualizerCtx.clearRect(0, 0, visualizerCanvas.width, visualizerCanvas.height);
+    analyser = null;
 }
 
 
@@ -129,16 +142,11 @@ function sendMessage() {
     const text = chatInput.value.trim();
     if (!text) return;
 
-    // 1. Show in UI
     addMessage(text, 'user');
     chatInput.value = '';
 
-    // 2. Send to Backend
     if (websocket && websocket.readyState === WebSocket.OPEN) {
-        websocket.send(JSON.stringify({
-            type: "text",
-            text: text
-        }));
+        websocket.send(JSON.stringify({ type: "text", text: text }));
     }
 }
 
@@ -209,29 +217,29 @@ async function leaveChannel() {
 
 async function startAiChat() {
     try {
-        // 1. Setup Audio Context
+        // Shared AudioContext for Mic & Playback & Visualizer
         audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        playbackContext = audioContext; // Use same context if possible, or create new if rate differs
 
-        // 2. WebSocket Connect
+        // Init Visualizer immediately with this context
+        initVisualizer(audioContext);
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
         websocket = new WebSocket(`${protocol}//${host}/ws/chat`);
 
         websocket.onopen = async () => {
             updateUiStatus('Connected! Say Hello', 'connected');
-            // Start Recording
             await startRecording();
         };
 
         websocket.onmessage = async (event) => {
             const data = JSON.parse(event.data);
 
-            // Handle Text Message
             if (data.type === 'text') {
                 addMessage(data.text, 'ai');
             }
 
-            // Handle Server Content (Audio)
             if (data.serverContent && data.serverContent.modelTurn) {
                 updateUiStatus('AI Speaking...', 'speaking');
 
@@ -240,15 +248,13 @@ async function startAiChat() {
                     if (part.inlineData && part.inlineData.data) {
                         playPcmAudio(part.inlineData.data);
                     }
-                    // Extract text parts if present in standard Gemini response
                     if (part.text) {
                         addMessage(part.text, 'ai');
                     }
                 }
 
-                // Reset status after a short delay (simple heuristic)
                 setTimeout(() => {
-                    if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    if (websocket && websocket.readyState === WebSocket.OPEN && currentSourceNodes.length === 0) {
                         updateUiStatus('Listening...', 'listening');
                     }
                 }, 2000);
@@ -267,13 +273,43 @@ async function startAiChat() {
 
 async function startRecording() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    window.localAiStream = stream;
+
     const source = audioContext.createMediaStreamSource(stream);
     const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+    // Connect Mic to Visualizer
+    if (analyser) {
+        source.connect(analyser); // Mic -> Visualizer
+    }
 
     source.connect(processor);
     processor.connect(audioContext.destination);
 
+    // Barge-in Logic: Detect Volume
+    const bargeInAnalyser = audioContext.createAnalyser();
+    bargeInAnalyser.fftSize = 256;
+    source.connect(bargeInAnalyser);
+    const volumeData = new Uint8Array(bargeInAnalyser.frequencyBinCount);
+
     processor.onaudioprocess = (e) => {
+        // Detect "Barge-in" (Interruption)
+        bargeInAnalyser.getByteFrequencyData(volumeData);
+        let sum = 0;
+        for (let i = 0; i < volumeData.length; i++) sum += volumeData[i];
+        const average = sum / volumeData.length;
+
+        // Threshold for human speech (adjustable)
+        if (average > 30 && currentSourceNodes.length > 0) {
+            console.log("Barge-in detected! Stopping AI playback.");
+            stopCurrentPlayback(); // Stop AI Audio immediately
+            updateUiStatus('Listening...', 'listening');
+
+            // Optional: visual indicator of interruption
+            avatarHalo.style.borderColor = 'red';
+            setTimeout(() => avatarHalo.style.borderColor = '', 500);
+        }
+
         if (websocket && websocket.readyState === WebSocket.OPEN) {
             const inputData = e.inputBuffer.getChannelData(0);
             const pcmData = floatTo16BitPCM(inputData);
@@ -290,7 +326,6 @@ async function startRecording() {
         }
     };
 
-    window.localAiStream = stream;
     window.aiProcessor = processor;
     window.aiSource = source;
 }
@@ -302,14 +337,25 @@ function stopAiChat() {
 
     websocket = null;
     audioContext = null;
+    currentSourceNodes = [];
+}
+
+function stopCurrentPlayback() {
+    // Stop all active audio nodes (cut off AI speech)
+    currentSourceNodes.forEach(node => {
+        try { node.stop(); } catch (e) { }
+    });
+    currentSourceNodes = [];
+    nextStartTime = 0; // Reset timing
+    if (playbackContext) nextStartTime = playbackContext.currentTime;
 }
 
 // Helper: Play PCM Audio from Base64 (Queued)
 function playPcmAudio(base64Data) {
     try {
-        if (!playbackCtx) {
-            playbackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-            initVisualizer(); // Init visualizer when playback starts
+        if (!playbackContext) {
+            playbackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+            initVisualizer(playbackContext);
         }
 
         const binaryString = atob(base64Data);
@@ -325,27 +371,36 @@ function playPcmAudio(base64Data) {
             float32Array[i] = int16Array[i] / 32768.0;
         }
 
-        const buffer = playbackCtx.createBuffer(1, float32Array.length, 24000);
+        const buffer = playbackContext.createBuffer(1, float32Array.length, 24000);
         buffer.getChannelData(0).set(float32Array);
 
-        const source = playbackCtx.createBufferSource();
+        const source = playbackContext.createBufferSource();
         source.buffer = buffer;
 
         // Connect to Visualizer AND Speaker
         if (analyser) {
-            source.connect(analyser); // Connect to visualizer
-            analyser.connect(playbackCtx.destination); // Connect visualizer to speaker (pass-through)
+            source.connect(analyser); // Connect AI Audio to Visualizer
+            analyser.connect(playbackContext.destination);
         } else {
-            source.connect(playbackCtx.destination);
+            source.connect(playbackContext.destination);
         }
 
-        const currentTime = playbackCtx.currentTime;
+        const currentTime = playbackContext.currentTime;
         if (nextStartTime < currentTime) {
             nextStartTime = currentTime + 0.05;
         }
 
         source.start(nextStartTime);
         nextStartTime += buffer.duration;
+
+        // Track this node for Barge-in cancellation
+        currentSourceNodes.push(source);
+        source.onended = () => {
+            currentSourceNodes = currentSourceNodes.filter(n => n !== source);
+            if (currentSourceNodes.length === 0) {
+                // updateUiStatus('Listening...', 'listening'); 
+            }
+        };
 
     } catch (e) {
         console.error("Audio Playback Error:", e);
