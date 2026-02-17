@@ -302,42 +302,48 @@ async function startRecording() {
     source.connect(bargeInAnalyser);
     const volumeData = new Uint8Array(bargeInAnalyser.frequencyBinCount);
 
-    processor.onaudioprocess = (e) => {
-        // Detect "Barge-in" (Interruption)
-        bargeInAnalyser.getByteFrequencyData(volumeData);
-        let sum = 0;
-        for (let i = 0; i < volumeData.length; i++) sum += volumeData[i];
-        const average = sum / volumeData.length;
+    // Detect "Barge-in" (Interruption)
+    bargeInAnalyser.getByteFrequencyData(volumeData);
+    let sum = 0;
+    for (let i = 0; i < volumeData.length; i++) sum += volumeData[i];
+    const average = sum / volumeData.length;
 
-        // Threshold for human speech (adjustable)
-        if (average > 30 && currentSourceNodes.length > 0) {
-            console.log("Barge-in detected! Stopping AI playback.");
-            stopCurrentPlayback(); // Stop AI Audio immediately
-            updateUiStatus('Listening...', 'listening');
+    // Threshold for human speech (adjustable) - Lowered to 15 for better sensitivity
+    if (average > 15 && currentSourceNodes.length > 0) {
+        console.log(`Barge-in detected! Level: ${average}`);
+        stopCurrentPlayback(); // Stop AI Audio immediately
 
-            // Optional: visual indicator of interruption
-            avatarHalo.style.borderColor = 'red';
-            setTimeout(() => avatarHalo.style.borderColor = '', 500);
-        }
-
+        // Send interrupt signal to backend
         if (websocket && websocket.readyState === WebSocket.OPEN) {
-            const inputData = e.inputBuffer.getChannelData(0);
-            const pcmData = floatTo16BitPCM(inputData);
-            const base64Audio = btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer)));
-
-            websocket.send(JSON.stringify({
-                "realtime_input": {
-                    "media_chunks": [{
-                        "mime_type": "audio/pcm",
-                        "data": base64Audio
-                    }]
-                }
-            }));
+            // We could send a "stop_generation" signal if Gemini API supported it via WebSocket easily
+            // For now, just stopping playback is the main UX win.
         }
-    };
 
-    window.aiProcessor = processor;
-    window.aiSource = source;
+        updateUiStatus('Listening...', 'listening');
+
+        // Visual indicator of interruption
+        avatarHalo.style.borderColor = '#ef4444'; // Red
+        setTimeout(() => avatarHalo.style.borderColor = '', 500);
+    }
+
+    if (websocket && websocket.readyState === WebSocket.OPEN) {
+        const inputData = e.inputBuffer.getChannelData(0);
+        const pcmData = floatTo16BitPCM(inputData);
+        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer)));
+
+        websocket.send(JSON.stringify({
+            "realtime_input": {
+                "media_chunks": [{
+                    "mime_type": "audio/pcm",
+                    "data": base64Audio
+                }]
+            }
+        }));
+    }
+};
+
+window.aiProcessor = processor;
+window.aiSource = source;
 }
 
 function stopAiChat() {
@@ -352,11 +358,17 @@ function stopAiChat() {
 
 function stopCurrentPlayback() {
     // Stop all active audio nodes (cut off AI speech)
+    console.log(`Stopping ${currentSourceNodes.length} active audio nodes`);
     currentSourceNodes.forEach(node => {
-        try { node.stop(); } catch (e) { }
+        try {
+            node.stop();
+            node.disconnect(); // Disconnect to be sure
+        } catch (e) { }
     });
     currentSourceNodes = [];
-    nextStartTime = 0; // Reset timing
+
+    // Reset timing logic so next phrase starts immediate
+    nextStartTime = 0;
     if (playbackContext) nextStartTime = playbackContext.currentTime;
 }
 

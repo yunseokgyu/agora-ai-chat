@@ -167,20 +167,25 @@ async def websocket_endpoint(websocket: WebSocket):
                         
                         # Check for audio content
                         has_audio = False
+                        text_content = ""
+                        
                         if "serverContent" in response and "modelTurn" in response["serverContent"]:
                             parts = response["serverContent"]["modelTurn"].get("parts", [])
                             for part in parts:
                                 if "inlineData" in part:
                                     has_audio = True
-                                    # print(f"DEBUG: Rx from Gemini (Audio): {len(part['inlineData']['data'])} chars")
                                 if "text" in part:
+                                    text_content += part["text"]
                                     print(f"DEBUG: Rx from Gemini (Text): {part['text']}")
-                        
-                        if not has_audio:
-                            # print(f"DEBUG: Rx from Gemini (Text/Other): {str(response)[:50]}...")
-                            pass
 
-                        # Just forward the raw Gemini response to the browser for now
+                        # If we have text, send it as a robust 'text' message too
+                        if text_content:
+                            await websocket.send_text(json.dumps({
+                                "type": "text",
+                                "text": text_content
+                            }))
+
+                        # Just forward the raw Gemini response to the browser (for audio processing)
                         await websocket.send_text(json.dumps(response))
                 except Exception as e:
                     print(f"Error gemini_to_browser: {e}")
