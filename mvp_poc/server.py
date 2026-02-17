@@ -7,7 +7,8 @@ import time
 import websockets
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from agora_token_builder import RtcTokenBuilder
 from dotenv import load_dotenv
 
@@ -16,6 +17,18 @@ dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 load_dotenv(dotenv_path=dotenv_path)
 
 app = FastAPI()
+
+# Get the directory containing this file (mvp_poc)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Mount Static Files
+app.mount("/css", StaticFiles(directory=os.path.join(BASE_DIR, "css")), name="css")
+app.mount("/js", StaticFiles(directory=os.path.join(BASE_DIR, "js")), name="js")
+app.mount("/assets", StaticFiles(directory=os.path.join(BASE_DIR, "assets")), name="assets")
+
+@app.get("/")
+async def get():
+    return FileResponse(os.path.join(BASE_DIR, "index.html"))
 
 # ... (existing middleware and config)
 

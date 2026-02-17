@@ -3,3 +3,4 @@ uvicorn
 websockets
 python-dotenv
 agora-token-builder
+aiofiles
