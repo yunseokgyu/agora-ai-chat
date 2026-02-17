@@ -57,8 +57,8 @@ app.mount("/assets", StaticFiles(directory=os.path.join(BASE_DIR, "assets")), na
 
 @app.get("/")
 async def get():
-    # Force no-cache for index.html to ensure users get the latest frontend updates
-    file_path = os.path.join(BASE_DIR, "index.html")
+    # Force no-cache for app.html (renamed from index.html)
+    file_path = os.path.join(BASE_DIR, "app.html")
     response = FileResponse(file_path)
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"

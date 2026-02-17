@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Voice Companion</title>
+    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.18.2.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <div class="app-container">
+        <header>
+            <h1>AI COMPANION</h1>
+        </header>
+
+        <section class="avatar-section">
+            <div id="ripple-ring" class="ripple-ring"></div>
+            <div id="avatar-halo" class="avatar-halo">
+                <img src="assets/avatar.png" alt="AI Avatar" id="avatar-img">
+            </div>
+
+            <div class="status-pill">
+                <div id="status-dot" class="status-dot"></div>
+                <span id="status-text">Ready to connect</span>
+            </div>
+        </section>
+
+        <footer class="controls-bar">
+            <button class="control-btn" disabled>⚙️</button>
+            <button id="call-btn" class="control-btn call-btn">📞</button>
+            <button class="control-btn" disabled>💬</button>
+        </footer>
+    </div>
+
+    <script src="js/script.js"></script>
+</body>
+
+</html>
