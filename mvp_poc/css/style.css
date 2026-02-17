@@ -1,0 +1,211 @@
+/* Modern Reset & Base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); /* Soft Pastel Gradient */
+    color: #333;
+    overflow: hidden;
+}
+
+/* Glassmorphism Card (Mobile Container) */
+.app-container {
+    width: 100%;
+    max-width: 420px; /* Mobile width */
+    height: 100%;
+    max-height: 850px;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 30px;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    position: relative;
+}
+
+/* Header */
+header {
+    text-align: center;
+    padding: 20px 0;
+}
+
+h1 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #4a4a4a;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+/* Main Avatar Area */
+.avatar-section {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    flex-direction: column;
+}
+
+.avatar-halo {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fff 0%, #f0f0f0 100%);
+    box-shadow: 
+        0 0 20px rgba(255, 255, 255, 0.8),
+        inset 0 0 20px rgba(0, 0, 0, 0.05);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Placeholder for Image/Video */
+.avatar-halo img, .avatar-halo video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    opacity: 0.8; 
+}
+
+/* Status Indicator */
+.status-pill {
+    margin-top: 20px;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #ccc;
+    transition: background-color 0.3s ease;
+}
+
+.status-dot.connected { background-color: #4ade80; box-shadow: 0 0 8px #4ade80; }
+.status-dot.listening { background-color: #fbbf24; box-shadow: 0 0 8px #fbbf24; animation: pulse 1.5s infinite; }
+.status-dot.speaking { background-color: #f472b6; box-shadow: 0 0 8px #f472b6; animation: pulse-fast 1s infinite; }
+
+/* Connection Ripple Effect (Volume Visualizer) */
+.ripple-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    width: 200px;
+    height: 200px;
+    z-index: 1;
+    opacity: 0;
+    transition: all 0.1s ease-out;
+}
+
+.ripple-active {
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+}
+
+
+/* Controls Bar */
+.controls-bar {
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 40px;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+
+.control-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2rem;
+    color: #555;
+    transition: all 0.2s ease;
+}
+
+.control-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+.control-btn:active {
+    transform: translateY(0);
+}
+
+.control-btn.call-btn {
+    width: 65px;
+    height: 65px;
+    background: linear-gradient(135deg, #81FBB8 0%, #28C76F 100%);
+    color: white;
+    font-size: 1.5rem;
+}
+
+.control-btn.hangup-btn {
+    width: 65px;
+    height: 65px;
+    background: linear-gradient(135deg, #FEB692 0%, #EA5455 100%);
+    color: white;
+    font-size: 1.5rem;
+}
+
+.control-btn:disabled {
+    background: #e0e0e0;
+    color: #aaa;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Animations */
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulse-fast {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+/* Legacy Support (Hidden) */
+#legacy-controls {
+    display: none;
+}

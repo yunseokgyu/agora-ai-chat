@@ -1,0 +1,6 @@
+
+agora-python-sdk
+websockets
+python-dotenv
+numpy
+requests
