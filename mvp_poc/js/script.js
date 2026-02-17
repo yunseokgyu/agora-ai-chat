@@ -33,36 +33,54 @@ const chatHistory = document.getElementById('chat-history');
 function updateUiStatus(msg, type = 'neutral') {
     statusText.innerText = msg;
     statusDot.className = 'status-dot'; // Reset
+
+    // Dot Status
     if (type === 'connected') statusDot.classList.add('connected');
     if (type === 'listening') statusDot.classList.add('listening');
     if (type === 'speaking') statusDot.classList.add('speaking');
+
+    // Button Status (Centralized Logic)
+    if (type === 'disconnected' || type === 'neutral') {
+        callBtn.classList.remove('active', 'hangup-btn');
+        callBtn.classList.add('call-btn');
+        callBtn.innerHTML = '📞';
+        callBtn.style.backgroundColor = '#10b981'; // Green
+        callBtn.disabled = false;
+        avatarHalo.style.transform = 'scale(1)';
+    } else {
+        // Any active state (connecting, connected, listening, speaking)
+        callBtn.classList.add('active', 'hangup-btn');
+        callBtn.classList.remove('call-btn');
+        callBtn.innerHTML = '❌';
+        callBtn.style.backgroundColor = '#ef4444'; // Red
+        if (type === 'connecting') {
+            callBtn.disabled = true; // Disable while connecting
+        } else {
+            callBtn.disabled = false;
+        }
+    }
 }
 
 async function toggleCall() {
     if (callBtn.classList.contains('active')) {
+        // HANG UP
         await stopAiChat();
         await leaveChannel();
-        callBtn.classList.remove('active');
-        callBtn.innerHTML = '📞'; // Phone icon
-        callBtn.classList.add('call-btn');
-        callBtn.classList.remove('hangup-btn');
-        updateUiStatus('Ready to connect');
-        avatarHalo.style.transform = 'scale(1)';
         stopVisualizer();
+        updateUiStatus('Disconnected', 'disconnected');
     } else {
-        updateUiStatus('Connecting...', 'neutral');
-        callBtn.disabled = true;
+        // CONNECT
+        updateUiStatus('Connecting...', 'connecting'); // Button becomes Red X (disabled)
 
         // Start Agora & Gemini
-        await joinChannel(); // Placeholder for now, main focus AI
-        await startAiChat();
-
-        callBtn.disabled = false;
-        callBtn.classList.add('active');
-        callBtn.innerHTML = '❌'; // Hangup icon
-        callBtn.classList.remove('call-btn');
-        callBtn.classList.add('hangup-btn');
-        avatarHalo.style.transform = 'scale(1.05)';
+        try {
+            await joinChannel(); // Placeholder
+            await startAiChat();
+            // startAiChat will call updateUiStatus('Connected! ...', 'connected') on success
+        } catch (e) {
+            console.error("Connection failed:", e);
+            updateUiStatus('Connection Failed', 'disconnected');
+        }
     }
 }
 
@@ -262,7 +280,8 @@ async function startAiChat() {
         };
 
         websocket.onclose = () => {
-            updateUiStatus('Disconnected', 'neutral');
+            console.log("WebSocket Disconnected");
+            updateUiStatus('Disconnected', 'disconnected');
         };
 
     } catch (e) {
@@ -340,11 +359,8 @@ async function startRecording() {
             }
         }));
     }
-};
-
-window.aiProcessor = processor;
-window.aiSource = source;
 }
+};
 
 function stopAiChat() {
     if (websocket) websocket.close();
