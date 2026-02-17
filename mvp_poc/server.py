@@ -18,6 +18,35 @@ load_dotenv(dotenv_path=dotenv_path)
 
 app = FastAPI()
 
+# Add CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Debug: Print current directory and files
+print(f"DEBUG: CWD is {os.getcwd()}")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+print(f"DEBUG: BASE_DIR is {BASE_DIR}")
+if os.path.exists(BASE_DIR):
+    print(f"DEBUG: Files in BASE_DIR: {os.listdir(BASE_DIR)}")
+else:
+    print("DEBUG: BASE_DIR does not exist!")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "timestamp": time.time()}
+
+@app.get("/")
+async def get():
+    file_path = os.path.join(BASE_DIR, "index.html")
+    if not os.path.exists(file_path):
+        return JSONResponse(status_code=404, content={"error": f"index.html not found at {file_path}"})
+    return FileResponse(file_path)
+
 # Get the directory containing this file (mvp_poc)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -70,7 +99,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "parts": [{"text": "당신은 '에오데(Aoede)'라는 이름의 30대 전문직 여성 AI 비서입니다. 지적이고 차분하며, 때로는 위트 있게 대화합니다. 반드시 한국어로 대답하세요. 사용자의 좋은 친구이자 비서가 되어주세요."}]
                     },
                     "generation_config": {
-                        "response_modalities": ["AUDIO"],
+                        "response_modalities": ["AUDIO", "TEXT"],
                         "speech_config": {
                             "voice_config": {"prebuilt_voice_config": {"voice_name": "Aoede"}}
                         }
@@ -100,7 +129,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         # Forward audio data
                         if "realtime_input" in message:
                              chunk_size = len(message["realtime_input"]["media_chunks"][0]["data"])
-                             print(f"DEBUG: Rx from Browser (Audio): {chunk_size} chars")
+                             # print(f"DEBUG: Rx from Browser (Audio): {chunk_size} chars")
                              
                              # Correctly forward as realtime_input for streaming
                              await gemini_ws.send(json.dumps({
@@ -109,6 +138,19 @@ async def websocket_endpoint(websocket: WebSocket):
                                         "mime_type": "audio/pcm;rate=16000",
                                         "data": message["realtime_input"]["media_chunks"][0]["data"]
                                     }]
+                                }
+                            }))
+                        
+                        # Forward text data (Chat)
+                        elif message.get("type") == "text":
+                            print(f"DEBUG: Rx from Browser (Text): {message['text']}")
+                            await gemini_ws.send(json.dumps({
+                                "client_content": {
+                                    "turns": [{
+                                        "role": "user",
+                                        "parts": [{"text": message["text"]}]
+                                    }],
+                                    "turn_complete": True
                                 }
                             }))
                         

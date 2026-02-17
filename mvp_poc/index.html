@@ -20,6 +20,7 @@
             <div id="ripple-ring" class="ripple-ring"></div>
             <div id="avatar-halo" class="avatar-halo">
                 <img src="assets/avatar.png" alt="AI Avatar" id="avatar-img">
+                <canvas id="visualizer"></canvas>
             </div>
 
             <div class="status-pill">
@@ -29,10 +30,26 @@
         </section>
 
         <footer class="controls-bar">
-            <button class="control-btn" disabled>⚙️</button>
+            <button class="control-btn" id="settings-btn">⚙️</button>
             <button id="call-btn" class="control-btn call-btn">📞</button>
-            <button class="control-btn" disabled>💬</button>
+            <button class="control-btn" id="chat-toggle-btn">💬</button>
         </footer>
+
+        <!-- Chat Interface (Hidden by default) -->
+        <div id="chat-interface" class="chat-interface hidden">
+            <div class="chat-header">
+                <span>Chat with Aoede</span>
+                <button id="close-chat-btn">✕</button>
+            </div>
+            <div id="chat-history" class="chat-history">
+                <!-- Messages will be injected here -->
+                <div class="message ai-message">안녕하세요! 목소리로 대화하기 힘들 땐 여기서 채팅해요.</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Type a message...">
+                <button id="send-btn">Send</button>
+            </div>
+        </div>
     </div>
 
     <script src="js/script.js"></script>
